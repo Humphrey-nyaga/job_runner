@@ -1,0 +1,177 @@
+<Layouts.app flash={@flash}>
+  <div class="mx-auto max-w-4xl space-y-10">
+    <section class="space-y-3">
+      <h1 class="text-3xl font-semibold tracking-tight">JobRunner</h1>
+      <p class="text-lg opacity-80">
+        A supervised, concurrent, retrying background job system on the BEAM, where each job's
+        unit of work is a real HTTP call to an OpenAI-compatible LLM endpoint.
+      </p>
+
+      <div class="flex flex-wrap items-center gap-3 pt-2">
+        <a
+          href={~p"/jobs"}
+          class="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-500"
+        >
+          Open the dashboard →
+        </a>
+        <span class="text-sm opacity-60">
+          Submit jobs, watch them retry, inspect failures, replay dead letters.
+        </span>
+      </div>
+    </section>
+
+    <section class="grid gap-3 sm:grid-cols-3">
+      <div class="rounded-xl border border-base-300 bg-base-100 p-4">
+        <div class="text-xs uppercase tracking-wide opacity-60">Provider</div>
+        <div class="mt-1 truncate font-mono text-sm" title={@llm[:base_url]}>
+          {@llm[:base_url]}
+        </div>
+        <div class="text-xs opacity-50">{@llm[:model]}</div>
+      </div>
+      <div class="rounded-xl border border-base-300 bg-base-100 p-4">
+        <div class="text-xs uppercase tracking-wide opacity-60">Concurrency</div>
+        <div class="mt-1 text-2xl font-semibold tabular-nums">
+          {@jobs_config[:max_concurrency]}
+        </div>
+        <div class="text-xs opacity-50">simultaneous LLM calls</div>
+      </div>
+      <div class="rounded-xl border border-base-300 bg-base-100 p-4">
+        <div class="text-xs uppercase tracking-wide opacity-60">Attempts</div>
+        <div class="mt-1 text-2xl font-semibold tabular-nums">{@jobs_config[:max_attempts]}</div>
+        <div class="text-xs opacity-50">
+          1 initial + {@jobs_config[:max_attempts] - 1} retries, then dead letter
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-4">
+      <h2 class="text-xl font-semibold">How to use it</h2>
+
+      <div class="space-y-3">
+        <div class="rounded-xl border border-base-300 bg-base-100 p-4">
+          <h3 class="font-medium">1. From the dashboard</h3>
+          <p class="mt-1 text-sm opacity-80">
+            Type a prompt, pick a job type and priority, submit. Or hit
+            <span class="font-medium">Seed 12 jobs</span>
+            to watch the concurrency limit hold under load. Click any row for the full prompt,
+            result, and per-attempt history.
+          </p>
+        </div>
+
+        <div class="rounded-xl border border-base-300 bg-base-100 p-4">
+          <h3 class="font-medium">2. From IEx</h3>
+          <pre class="mt-2 overflow-x-auto rounded-lg bg-base-200 p-3 text-xs">{~S[{:ok, id} = JobRunner.Jobs.add_job("Summarise the Q3 ledger movement.")
+JobRunner.Jobs.status(id)      #=> {:ok, :running}
+JobRunner.Jobs.result(id)      #=> {:ok, "..."}
+
+# Structured output, validated. Malformed JSON is a retryable failure.
+{:ok, id} = JobRunner.Jobs.add_job(%{
+  prompt: "Q3 revenue rose 4% to KES 812M on mobile lending.",
+  type: :summarize,
+  priority: :high
+})
+#=> {:ok, %{summary: "...", category: :finance}}
+
+JobRunner.Jobs.stats()         # current state
+JobRunner.Jobs.metrics()       # cumulative counters
+JobRunner.Jobs.dead_letters()  # failures, with full attempt history]}</pre>
+        </div>
+
+        <div class="rounded-xl border border-base-300 bg-base-100 p-4">
+          <h3 class="font-medium">3. The demo script</h3>
+          <pre class="mt-2 overflow-x-auto rounded-lg bg-base-200 p-3 text-xs">mix run demo.exs</pre>
+          <p class="mt-2 text-sm opacity-80">
+            Ten sections in about two minutes: supervision tree, bounded concurrency, backoff,
+            dead letters, crash isolation, circuit breaker, and killing the queue mid-flight.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-4">
+      <h2 class="text-xl font-semibold">Things worth trying</h2>
+
+      <div class="overflow-x-auto rounded-xl border border-base-300">
+        <table class="w-full text-sm">
+          <thead class="bg-base-200 text-left text-xs uppercase tracking-wide opacity-70">
+            <tr>
+              <th class="p-3">Try this</th>
+              <th class="p-3">What you should see</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-t border-base-300">
+              <td class="p-3">Seed 12 jobs and watch <em>In flight</em></td>
+              <td class="p-3 opacity-80">
+                Pinned at {@jobs_config[:max_concurrency]}, never higher. The rest queue.
+              </td>
+            </tr>
+            <tr class="border-t border-base-300">
+              <td class="p-3"><strong>Turn off your wifi</strong></td>
+              <td class="p-3 opacity-80">
+                Nothing fails. The circuit breaker opens, dispatch stops, and jobs sit at
+                <code>pending</code>
+                with their retry budgets frozen. Turn it back on and a single probe closes the
+                breaker; the backlog drains.
+              </td>
+            </tr>
+            <tr class="border-t border-base-300">
+              <td class="p-3">Use an invalid API key</td>
+              <td class="p-3 opacity-80">
+                Fails after <strong>one</strong>
+                attempt, not five. A 401 is permanent — retrying sends identical bytes.
+              </td>
+            </tr>
+            <tr class="border-t border-base-300">
+              <td class="p-3">Kill the queue mid-flight</td>
+              <td class="p-3 opacity-80">
+                <code>Process.exit(Process.whereis(JobRunner.Jobs.Queue), :kill)</code>
+                — in-flight jobs are reconciled and resume. Nothing is stranded, and the
+                interrupted attempt is refunded rather than charged.
+              </td>
+            </tr>
+            <tr class="border-t border-base-300">
+              <td class="p-3">Retry a dead letter</td>
+              <td class="p-3 opacity-80">
+                Dead letters tab → <em>Retry</em>. Replay is manual on purpose: an automatic drain
+                turns a retry storm into an infinite one.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="space-y-3">
+      <h2 class="text-xl font-semibold">Design</h2>
+      <p class="text-sm opacity-80">
+        Full reasoning lives in <code>docs/DESIGN.md</code>
+        — C4 and sequence diagrams, an FMEA table, and 13 ADRs with the alternatives that were
+        rejected and why. The four that carry the most weight:
+      </p>
+
+      <ul class="space-y-2 text-sm">
+        <li class="rounded-lg border border-base-300 bg-base-100 p-3">
+          <strong>Backoff is a queue timer, not a worker sleep.</strong>
+          A sleeping worker still holds a concurrency slot — four sleeping workers mean a
+          throughput of zero.
+        </li>
+        <li class="rounded-lg border border-base-300 bg-base-100 p-3">
+          <strong>Two nested supervision strategies.</strong>
+          The store must outlive a queue crash; the queue and its task supervisor are mutually
+          dependent and restart together.
+        </li>
+        <li class="rounded-lg border border-base-300 bg-base-100 p-3">
+          <strong>Every outcome carries a generation token.</strong>
+          A stale deadline from attempt 3 cannot kill a healthy attempt 4.
+        </li>
+        <li class="rounded-lg border border-base-300 bg-base-100 p-3">
+          <strong>Recovery reconciles every non-terminal job.</strong>
+          Re-enqueuing only <code>pending</code>
+          would strand jobs killed mid-flight in <code>running</code>
+          forever.
+        </li>
+      </ul>
+    </section>
+  </div>
+</Layouts.app>
