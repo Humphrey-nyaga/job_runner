@@ -38,3 +38,9 @@ npm-debug.log
 
 # local secrets
 .env
+
+# JetBrains
+.idea/
+
+# Personal prep notes — not part of the submission
+INTERVIEW-PREP.md

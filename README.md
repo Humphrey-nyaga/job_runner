@@ -23,6 +23,18 @@ take a couple of minutes. Only the dashboard needs them — `mix test` and
 
 No database, no Redis, no broker. Job state lives in ETS inside the VM.
 
+**There is no LLM to install.** The system targets the internal vLLM endpoint
+supplied with the brief, which is already running. Verify it before a run:
+
+```bash
+curl http://192.168.84.7:8001/health
+```
+
+If that times out you are off the VPN — see
+[Both providers were used](#both-providers-were-used) for the OpenAI fallback,
+which needs only a key. An unreachable endpoint is itself a handled failure
+mode, not a blocker: jobs hold at pending and resume when it returns.
+
 From IEx (`iex -S mix`):
 
 ```elixir
@@ -52,9 +64,27 @@ JobRunner.LLM.describe()        # which provider is actually in force
 
 ---
 
+## Requirements coverage
+
+| Goal | How it is met | Where |
+|---|---|---|
+| **Process isolation** — one job crash must not take the queue or other jobs with it | Jobs run as `:temporary` tasks under `Task.Supervisor`, started with `async_nolink`, so a crash arrives as a `:DOWN` message rather than an exit signal | `jobs/queue.ex`, `jobs/execution_supervisor.ex` |
+| **Retry logic** — retry to a max with exponential backoff | `base × 2^(attempt-1)` with jitter, capped; budget enforced at the single write path; terminal failures dead-lettered with full history | `jobs/backoff.ex`, `jobs/queue.ex`, `jobs/store.ex` |
+| **Supervision** — sensible restart strategies, explainable | `:rest_for_one` over `[Store, ExecutionSupervisor]`; `:one_for_all` over `[Task.Supervisor, Queue]` | `jobs/supervisor.ex`, `jobs/execution_supervisor.ex` |
+| **Concurrency** — parallel, within a deliberate limit | `max_concurrency` gate in the Queue, plus `:max_children` on the Task.Supervisor as a structural backstop | `jobs/queue.ex` |
+| **Status tracking** — lifecycle queryable by id | `pending → running → completed \| failed`, read straight from ETS with no process hop | `Jobs.status/1`, `Jobs.result/1`, `jobs/store.ex` |
+| **Real integration** — real HTTP, not simulated work | `Req` against `POST /v1/chat/completions`; the Mock adapter exists only for tests and is never used at runtime | `llm/openai_compatible.ex` |
+
+Bonus items: metrics, LiveView dashboard, ETS persistence across process
+restarts, job prioritisation, structured JSON with validation, and a tool-call
+step.
+
+---
+
 ## Configuration
 
 ### Both providers were used
+
 
 Development ran against **both** endpoints, and the code is identical for each:
 
