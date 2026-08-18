@@ -174,12 +174,11 @@ defmodule JobRunnerWeb.DashboardLive do
           <.breaker_badge breaker={@breaker} />
         </header>
 
-        <section class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <section class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <.stat label="Pending" value={@counts.pending} />
           <.stat label="Running" value={@counts.running} accent="text-blue-500" />
           <.stat label="Completed" value={@counts.completed} accent="text-emerald-500" />
           <.stat label="Failed" value={@counts.failed} accent="text-rose-500" />
-          <.stat label="Retried" value={@metrics.retried} accent="text-amber-500" />
           <.stat label="In flight" value={@stats.in_flight} sub={"limit #{@stats.in_flight_limit}"} />
         </section>
 
@@ -320,65 +319,46 @@ defmodule JobRunnerWeb.DashboardLive do
   defp side_panel(assigns) do
     ~H"""
     <div class="rounded-xl border border-base-300 bg-base-100 p-4 text-sm">
-      <div class="mb-2 text-xs uppercase tracking-wide opacity-60">
-        Pending breakdown
-      </div>
-      <dl class="space-y-1">
-        <div class="flex justify-between">
-          <dt class="opacity-70">Runnable now</dt>
-          <dd class="tabular-nums">{@stats.runnable}</dd>
-        </div>
-        <div class="flex justify-between">
-          <dt class="opacity-70" title="Waiting out a retry backoff, not holding a slot">
-            Awaiting retry
-          </dt>
-          <dd class="tabular-nums text-amber-600">{@stats.scheduled}</dd>
-        </div>
-        <div class="flex justify-between border-t border-base-300 pt-1 font-medium">
-          <dt>Pending total</dt>
-          <dd class="tabular-nums">{@stats.pending}</dd>
-        </div>
-      </dl>
-      <p :if={@stats.scheduled > 0} class="mt-1 text-xs opacity-50">
-        Jobs awaiting a backoff are not in a queue — they are on a timer, so they
-        hold no concurrency slot.
-      </p>
-
-      <div class="mt-4 mb-2 text-xs uppercase tracking-wide opacity-60">
-        Queue depth by priority
-      </div>
+      <div class="mb-2 text-xs uppercase tracking-wide opacity-60">Queued</div>
       <dl class="space-y-1">
         <div :for={p <- [:high, :normal, :low]} class="flex justify-between">
           <dt class="capitalize opacity-70">{p}</dt>
           <dd class="tabular-nums">{@stats.queued[p]}</dd>
         </div>
-        <div class="flex justify-between border-t border-base-300 pt-1 font-medium">
-          <dt>Queued</dt>
-          <dd class="tabular-nums">{@stats.queue_depth}</dd>
+        <div :if={@stats.scheduled > 0} class="flex justify-between text-amber-600">
+          <dt title="Waiting out a backoff — on a timer, holding no slot">awaiting retry</dt>
+          <dd class="tabular-nums">{@stats.scheduled}</dd>
         </div>
       </dl>
 
       <div class="mt-4 mb-2 text-xs uppercase tracking-wide opacity-60">Lifetime</div>
       <dl class="space-y-1">
-        <div
-          :for={
-            {label, value} <- [
-              {"Processed", @metrics.processed},
-              {"Success rate", format_rate(@metrics.success_rate)},
-              {"Retried", @metrics.retried},
-              {"Crashed", @metrics.crashed},
-              {"Timed out", @metrics.timed_out},
-              {"Breaker trips", @metrics.breaker_trips}
-            ]
-          }
-          class="flex justify-between"
-        >
+        <div :for={{label, value} <- lifetime(@metrics)} class="flex justify-between">
           <dt class="opacity-70">{label}</dt>
           <dd class="tabular-nums">{value}</dd>
         </div>
       </dl>
     </div>
     """
+  end
+
+  # Always-relevant figures first; the rest only once they are non-zero, so a
+  # healthy system shows three numbers rather than six zeroes.
+  defp lifetime(metrics) do
+    [
+      {"Processed", metrics.processed},
+      {"Success rate", format_rate(metrics.success_rate)},
+      {"Retried", metrics.retried}
+    ] ++
+      for {label, key} <- [
+            {"Crashed", :crashed},
+            {"Timed out", :timed_out},
+            {"Breaker trips", :breaker_trips},
+            {"Tool calls", :tool_calls}
+          ],
+          metrics[key] > 0 do
+        {label, metrics[key]}
+      end
   end
 
   attr :filter, :atom, required: true

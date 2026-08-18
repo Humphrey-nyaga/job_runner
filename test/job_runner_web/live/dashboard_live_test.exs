@@ -242,9 +242,10 @@ defmodule JobRunnerWeb.DashboardLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/jobs")
 
-      assert html =~ "Awaiting retry"
-      assert html =~ "Runnable now"
-      assert html =~ "hold no concurrency slot"
+      # A job on a backoff timer is deliberately not in any FIFO, so reporting
+      # only queue depth would show zero while several jobs are pending.
+      assert html =~ "awaiting retry"
+      assert Jobs.stats().scheduled == length(ids)
     end
 
     test "the breakdown always reconciles with the pending total" do
