@@ -40,7 +40,7 @@ defmodule JobRunner.Jobs.Tools do
   Run a tool by name.
 
   Returns `{:error, :unknown_tool}` for anything outside the whitelist,
-  including valid function names elsewhere in the system — which is the point.
+  including valid function names elsewhere in the system.
   A raising tool is caught and reported, so a broken tool surfaces as a failed
   job with a readable reason rather than an unexplained task exit.
   """
@@ -61,8 +61,6 @@ defmodule JobRunner.Jobs.Tools do
   end
 
   def invoke(_), do: {:error, :unknown_tool}
-
-  # --- The tools themselves --------------------------------------------------
 
   @doc false
   def get_time, do: DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()

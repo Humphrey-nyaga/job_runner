@@ -13,8 +13,7 @@ defmodule JobRunnerWeb.DashboardLive do
       transition would do far more work than the display justifies.
 
   Reads go straight to ETS, so an open dashboard never queues behind
-  dispatch. Rendering this page cannot slow the engine down, which is the
-  property that makes it safe to leave open during a demo.
+  dispatch. Rendering this page cannot slow the engine down.
 
   ## Why the table is filtered rather than simply truncated
 
@@ -342,8 +341,6 @@ defmodule JobRunnerWeb.DashboardLive do
     """
   end
 
-  # Always-relevant figures first; the rest only once they are non-zero, so a
-  # healthy system shows three numbers rather than six zeroes.
   defp lifetime(metrics) do
     [
       {"Processed", metrics.processed},

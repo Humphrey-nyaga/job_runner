@@ -675,23 +675,3 @@ likely CONNECT timeout — host unreachable (VPN down? wrong base_url?)
    direction; a monotonic clock is the correct primitive.
 7. **`requeue/1` is unauthenticated.** Adequate for a local dashboard.
 
-## Comparison with Oban
-
-Oban is the production standard for Elixir job processing, so the comparison is
-fair to make explicitly.
-
-On scheduling semantics — retry, exponential backoff, attempt budgets, priority,
-status lifecycle, per-job crash isolation, terminal-failure inspection and
-replay — this system is at parity, and adds a circuit breaker that Oban does not
-ship. Those are the mechanics the brief asks about.
-
-The gap is **durability**, and it is architectural rather than a feature list.
-Oban's design flows from putting the queue in Postgres: jobs survive a VM
-restart, multiple nodes coordinate through row locks, and unique jobs, cron
-scheduling and rate limiting all become natural because there is a shared
-transactional store to express them against. Every one of those follows from
-that single choice.
-
-This is what Oban's *scheduler* looks like with an ETS store instead of a
-Postgres one — which is what the brief asked for. The moment jobs must not be
-lost, Oban is the right answer regardless of how good the scheduler is.

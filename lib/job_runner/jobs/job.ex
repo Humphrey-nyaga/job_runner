@@ -4,8 +4,6 @@ defmodule JobRunner.Jobs.Job do
 
   ## Why `attempts` and `attempt_id` are two different fields
 
-  This looks redundant and is not. They answer different questions:
-
     * `attempts` is the **budget counter** — how many attempts this job has spent
       against `max_attempts`. It stops the job retrying forever.
 
@@ -88,10 +86,7 @@ defmodule JobRunner.Jobs.Job do
   @doc """
   Build a job from user input.
 
-  Validation happens here, at admission, rather than at dispatch. A prompt that
-  can never succeed should be rejected while the caller is still holding the
-  return value — not discovered four attempts later by a worker (a 400
-  from a malformed prompt is permanent, so the cheapest fix is never sending it).
+  Validation happens here, at admission, rather than at dispatch.
   """
   @spec new(map()) :: {:ok, t()} | {:error, atom()}
   def new(attrs) when is_map(attrs) do
@@ -137,8 +132,6 @@ defmodule JobRunner.Jobs.Job do
     next |> DateTime.diff(now, :millisecond) |> max(0)
   end
 
-  # --- Validation ------------------------------------------------------------
-
   defp validate_prompt(prompt) when is_binary(prompt) do
     trimmed = String.trim(prompt)
 
@@ -146,9 +139,7 @@ defmodule JobRunner.Jobs.Job do
       trimmed == "" ->
         {:error, :invalid_prompt}
 
-      # Not token counting — a deliberately conservative byte cap that keeps us
-      # far inside a 32k-token context window with room for the response.
-      # Rejecting at admission beats discovering it as a provider 400.
+      # Conservative byte cap that keeps us inside a 32k-token context window with room for the response.
       byte_size(trimmed) > config(:max_prompt_bytes, 24_000) ->
         {:error, :prompt_too_large}
 
@@ -176,11 +167,8 @@ defmodule JobRunner.Jobs.Job do
 
   defp validate_type(_), do: {:error, :unknown_type}
 
-  # A job whose budget is already spent can never be dispatched, and nothing
-  # would ever fail it either — it would sit at :pending forever. `max_attempts:
-  # 0` reached that state straight from the public API, so the value is now
-  # validated at admission rather than trusted.
-  defp validate_max_attempts(value) when is_integer(value) and value >= 1 and value <= 20,
+  # Ensure max attempts is non zero and non-negative
+  defp validate_max_attempts(value) when is_integer(value) and value >= 1 and value <= 10,
     do: {:ok, value}
 
   defp validate_max_attempts(_), do: {:error, :invalid_max_attempts}
@@ -191,8 +179,7 @@ defmodule JobRunner.Jobs.Job do
   defp validate_priority("low"), do: {:ok, :low}
   defp validate_priority(_), do: {:error, :invalid_priority}
 
-  # 16 random bytes, url-safe. Sortable ids would be nicer for display but would
-  # imply an ordering guarantee the priority queue does not honour anyway.
+  # Randomly generated Id String
   defp generate_id do
     16 |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
   end

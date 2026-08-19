@@ -22,8 +22,7 @@ defmodule JobRunner.Jobs.Store do
 
   An ETS table dies with its owner, so whoever owns it is a single point of data
   loss. This process therefore holds no interesting logic beyond validate-write-
-  broadcast: its crash surface stays small while the process that does the risky
-  thinking — the Queue — is free to die without taking the data with it.
+  broadcast: its crash surface stays small while the Queue is free to die without taking the data with it.
 
   Metrics deliberately do **not** live here. They are handled with `:counters`
   (see `JobRunner.Jobs.Metrics`), because atomic increments from many worker
@@ -44,9 +43,7 @@ defmodule JobRunner.Jobs.Store do
   @pubsub JobRunner.PubSub
   @topic "jobs"
 
-  # Which status transitions are legal. Anything absent is rejected, which turns
-  # a whole class of ordering bug into a visible {:error, :invalid_transition}
-  # rather than silent state corruption.
+  # Valid transitions
   @transitions %{
     pending: [:running],
     running: [:completed, :failed, :pending],
@@ -56,7 +53,7 @@ defmodule JobRunner.Jobs.Store do
     failed: []
   }
 
-  # --- Client: writes (serialised through the owner) --------------------------
+  # --- Client: writes (serialised through the owner)
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
@@ -120,7 +117,7 @@ defmodule JobRunner.Jobs.Store do
   @spec requeue(String.t()) :: {:ok, Job.t()} | {:error, :not_found | :not_dead_lettered}
   def requeue(job_id), do: GenServer.call(__MODULE__, {:requeue, job_id})
 
-  # --- Client: reads (direct ETS, no message) ---------------------------------
+  # --- Client: reads (direct ETS, no message)
 
   @doc "O(1) direct read. Never touches this process's mailbox."
   @spec fetch(String.t()) :: {:ok, Job.t()} | {:error, :not_found}
@@ -226,7 +223,7 @@ defmodule JobRunner.Jobs.Store do
   @spec subscribe() :: :ok | {:error, term()}
   def subscribe, do: PubSub.subscribe(@pubsub, @topic)
 
-  # --- Server ----------------------------------------------------------------
+  # --- Server
 
   @impl true
   def init(_opts) do
@@ -415,7 +412,7 @@ defmodule JobRunner.Jobs.Store do
     end
   end
 
-  # --- Internals -------------------------------------------------------------
+  # --- Internals 
 
   # Every status-changing write funnels through here, so the staleness check and
   # the transition check exist in exactly one place.

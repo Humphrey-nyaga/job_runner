@@ -17,10 +17,6 @@ defmodule JobRunner.Jobs.Metrics do
   `:counters` gives atomic increments from any process with no owner and no
   lock. The reference lives in `:persistent_term`, which is optimised for
   exactly this: written once, read from everywhere, no copying on read.
-
-  Being able to say "ETS here, `:counters` there, and here is why" is worth more
-  than uniformity for its own sake.
-
   ## Cumulative, not current
 
   These count *events over time* and never decrease. Current state — how many
@@ -95,8 +91,6 @@ defmodule JobRunner.Jobs.Metrics do
 
   @doc """
   Derived rates, for the dashboard.
-
-  Kept out of `all/0` because a rate is a presentation concern, not a counter.
   """
   @spec summary() :: map()
   def summary do

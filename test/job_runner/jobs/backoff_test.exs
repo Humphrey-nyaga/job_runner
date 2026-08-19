@@ -5,12 +5,10 @@ defmodule JobRunner.Jobs.BackoffTest do
 
   describe "the advertised schedule" do
     test "doubles from the base" do
-      # The exact sequence the brief names, and the one the README claims.
       assert Backoff.schedule(4) == [500, 1000, 2000, 4000]
     end
 
     test "max_attempts: 5 produces exactly 4 gaps" do
-      # The off-by-one made explicit: 5 attempts have 4 waits between them.
       assert length(Backoff.schedule(5 - 1)) == 4
     end
 
@@ -45,8 +43,6 @@ defmodule JobRunner.Jobs.BackoffTest do
     end
 
     test "actually decorrelates — 200 samples are not all identical" do
-      # The property that matters: without this, a batch that fails together
-      # retries together and stampedes the endpoint it just overloaded.
       samples = for _ <- 1..200, do: Backoff.delay(3, jitter: 0.25)
 
       assert length(Enum.uniq(samples)) > 50

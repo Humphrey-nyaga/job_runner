@@ -5,8 +5,7 @@ defmodule JobRunner.LLM.OpenAICompatible do
   This is deliberately **one** adapter rather than two. The internal vLLM
   endpoint and the OpenAI API accept the same request shape and return the same
   response envelope, so the difference between them is `base_url`, `model`, and
-  `api_key` — configuration, not behaviour. Ollama, LM Studio, Groq,
-  Together and vLLM all fit here too.
+  `api_key` — configuration, not behaviour.
 
   ## The one non-obvious line
 
@@ -54,24 +53,17 @@ defmodule JobRunner.LLM.OpenAICompatible do
       url: "/v1/chat/completions",
       json: body,
       auth: {:bearer, api_key},
-      # One attempt only — see moduledoc.
       retry: false,
-      # Fail fast on a dead host rather than hanging on connect.
       connect_options: [timeout: Keyword.get(opts, :connect_timeout, 5_000)],
       receive_timeout: Keyword.get(opts, :receive_timeout, 45_000)
     )
   end
 
-  # Roles cross the wire as strings; we keep them as atoms internally so a typo
-  # is a compile-time-ish error rather than a silently ignored field.
   defp encode_message(%{role: role, content: content}) do
     %{role: to_string(role), content: content}
   end
 
-  # Every optional field is omitted rather than defaulted. Providers in this
-  # family disagree about which fields they accept, and sending a parameter a
-  # server rejects is a hard 400 — so "not configured" must mean "not sent",
-  # never "sent with our guess".
+  # process optional fields per provider.
   defp maybe_put(body, _key, nil), do: body
   defp maybe_put(body, key, value), do: Map.put(body, key, value)
 
@@ -81,7 +73,6 @@ defmodule JobRunner.LLM.OpenAICompatible do
   # field name keeps that quirk inside this module.
   defp token_param(opts), do: Keyword.get(opts, :token_param, :max_tokens)
 
-  # --- Response handling -----------------------------------------------------
   #
   # Every branch returns a tagged tuple; nothing raises. An
   # exception escaping this module means we hit a case we did not anticipate,
@@ -130,13 +121,10 @@ defmodule JobRunner.LLM.OpenAICompatible do
     truncated? = Map.get(choice, "finish_reason") == "length"
 
     cond do
-      # Cause first: thinking consumed the budget and no answer was produced.
       is_nil(content) and is_binary(reasoning) ->
         {:error, Error.reasoning_only(String.length(reasoning))}
 
-      # Real content, but cut off. Not a short answer — for a structured job type
-      # this is invalid JSON, and accepting it turns a budget problem into a
-      # parsing problem one layer up.
+      # Real content, but cut off.
       is_binary(content) and truncated? ->
         {:error, Error.truncated(content)}
 
@@ -154,10 +142,7 @@ defmodule JobRunner.LLM.OpenAICompatible do
     end
   end
 
-  # A 200 that does not carry the envelope we expect. This happens for real:
-  # a proxy returning an HTML error page with status 200, a model server
-  # returning `{"error": ...}`, or `choices: []` under load. It is retryable,
-  # so it must be an error value rather than a MatchError crash.
+
   defp extract_content(body) do
     {:error, Error.malformed_response(body)}
   end
@@ -166,7 +151,7 @@ defmodule JobRunner.LLM.OpenAICompatible do
   Liveness check against `GET /health`.
 
   Not part of the `JobRunner.LLM` behaviour — it is an operational convenience
-  for the README and the dashboard, and not every provider offers it (OpenAI
+  the dashboard, and not every provider offers it (OpenAI
   does not). Kept out of the behaviour so the contract stays minimal.
   """
   @spec health(keyword()) :: :ok | {:error, Error.t()}

@@ -1,6 +1,6 @@
 defmodule JobRunner.Jobs.Failure do
   @moduledoc """
-  Decides what a failure *means*. Pure — no processes, no I/O.
+  Decides what a failure *means*.
 
   `JobRunner.LLM.Error` records what happened; this module decides what to do
   about it, classified by who owns the fix:
@@ -64,33 +64,23 @@ defmodule JobRunner.Jobs.Failure do
   def classify(%Error{class: :truncated}), do: :permanent
   def classify(%Error{class: :reasoning_only}), do: :permanent
 
-  # 4xx that are genuinely transient, called out rather than swept into the
-  # catch-all below. 425 asks the client to retry once the handshake completes.
+  # 4xx that are genuinely transient
   def classify(%Error{class: :http_status, code: 408}), do: :systemic
   def classify(%Error{class: :http_status, code: 409}), do: :retryable
   def classify(%Error{class: :http_status, code: 425}), do: :retryable
 
-  # Unknown 4xx: assume permanent. Guessing "retryable" burns the full budget
-  # against a request that cannot succeed.
+  # Unknown 4xx: assume permanent.
   def classify(%Error{class: :http_status, code: code}) when code in 400..499, do: :permanent
 
-  # --- Retryable: this attempt failed; the endpoint is fine -------------------
-
-  # The server answered promptly and correctly; only the generation was
-  # unusable, and another sample may parse. Never systemic — a model returning
-  # bad JSON must not open the breaker.
   def classify(%Error{class: :malformed_response}), do: :retryable
   def classify(%Error{class: :empty_response}), do: :retryable
 
-  # A well-formed response with the wrong shape: resample, do not blame the
-  # endpoint.
   def classify({:invalid_json, _}), do: :retryable
   def classify({:invalid_shape, _}), do: :retryable
 
-  # The Queue's own deadline fired.
   def classify(:job_timeout), do: :systemic
 
-  # --- Crashes ---------------------------------------------------------------
+  # --- Crashes
 
   # A bug in our code, not a statement about the endpoint, so it must never trip
   # the breaker. Retryable, but on the reduced budget below: most exceptions are

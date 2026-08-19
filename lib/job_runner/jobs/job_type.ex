@@ -66,12 +66,6 @@ defmodule JobRunner.Jobs.JobType do
 
   @doc """
   Pull a JSON object out of a model response.
-
-  Models routinely wrap JSON in prose or a ```json fence even when told not to.
-  Being tolerant here is not sloppiness — it is the difference between a retry
-  that costs a second call and one that succeeds immediately. We still reject
-  anything that is not actually a JSON object, so tolerance never becomes
-  guessing.
   """
   @spec extract_json(String.t()) :: {:ok, map()} | {:error, term()}
   def extract_json(text) do

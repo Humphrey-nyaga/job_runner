@@ -8,7 +8,7 @@ defmodule JobRunner.Jobs.JobType.Summarize do
   category outside the allowed set. None of those are endpoint failures, and all
   of them are worth one more sample.
 
-  ## Validation is a whitelist, not a vibe check
+  ## Validation is a whitelist
 
   `@categories` is closed. A model returning `"miscellaneous"` when the options
   are finance/technical/legal/other is a failed attempt, not a new category — if
@@ -43,6 +43,7 @@ defmodule JobRunner.Jobs.JobType.Summarize do
   """
 
   @impl true
+  @spec messages(JobRunner.Jobs.Job.t()) :: [%{content: binary(), role: :system | :user}, ...]
   def messages(%Job{prompt: prompt}) do
     LLM.messages("Summarise and classify the following:\n\n#{prompt}", @system)
   end
@@ -59,8 +60,7 @@ defmodule JobRunner.Jobs.JobType.Summarize do
   @impl true
   def llm_opts do
     # Ask the provider to constrain output to JSON where it supports it. This is
-    # a hint, not a guarantee — vLLM and older servers ignore it — so `parse/1`
-    # still validates everything. Belt and braces, because the belt is optional.
+    # a hint, not a guarantee.
     [response_format: %{type: "json_object"}]
   end
 

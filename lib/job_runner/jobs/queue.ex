@@ -139,7 +139,6 @@ defmodule JobRunner.Jobs.Queue do
   def handle_info({ref, result}, state) when is_reference(ref) do
     case pop_in_flight(state, ref) do
       {nil, state} ->
-        # Result for an attempt we already gave up on (deadline fired first).
         {:noreply, state}
 
       {attempt, state} ->
@@ -152,7 +151,6 @@ defmodule JobRunner.Jobs.Queue do
     end
   end
 
-  # The task died without returning a value.
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
     case pop_in_flight(state, ref) do
       {nil, state} ->
@@ -178,14 +176,12 @@ defmodule JobRunner.Jobs.Queue do
   def handle_info({:job_timeout, job_id, attempt_id}, state) do
     case find_in_flight(state, job_id, attempt_id) do
       nil ->
-        # Stale: this attempt already settled, or has been superseded.
         {:noreply, state}
 
       {ref, attempt} ->
         {_, state} = pop_in_flight(state, ref)
         Metrics.increment(:timed_out)
         Process.demonitor(ref, [:flush])
-        # Reclaim the slot rather than waiting on a task that may never answer.
         Task.Supervisor.terminate_child(state.task_supervisor, attempt.pid)
 
         {:noreply, state |> settle(attempt, {:error, :job_timeout}) |> dispatch()}
@@ -212,7 +208,7 @@ defmodule JobRunner.Jobs.Queue do
 
   def handle_info(_message, state), do: {:noreply, state}
 
-  # --- Recovery ----------------------------------------------------
+  # --- Recovery
 
   # Every non-terminal record is reconciled, not just the pending ones. A sweep
   # that only re-enqueued :pending would leave jobs killed mid-flight stuck in
@@ -231,20 +227,19 @@ defmodule JobRunner.Jobs.Queue do
         :pending ->
           case Job.delay_until_runnable(job, DateTime.utc_now()) do
             0 -> push(acc, job.id, job.priority)
-            # Re-arm for the REMAINING delay, not the full backoff again.
             delay -> schedule_retry_timer(acc, job.id, delay)
           end
       end
     end)
   end
 
-  # --- Dispatch --------------------------------------------------------------
+  # --- Dispatch
 
   # Fill every free slot. Recurses until a gate closes or the queues empty, so a
   # single call after any state change is always sufficient.
   #
   # Two gates, checked in order: the concurrency ceiling, then the circuit
-  # breaker. Note what happens when the breaker denies — we return *without
+  # breaker. When the breaker denies — we return *without
   # popping anything*. Jobs stay queued with their attempt budgets untouched,
   # which is the entire point: an outage should cost time, not jobs.
   defp dispatch(state) do
@@ -363,7 +358,7 @@ defmodule JobRunner.Jobs.Queue do
     end
   end
 
-  # --- Settlement ------------------------------------------------------------
+  # --- Settlement
 
   defp settle(state, attempt, {:ok, result}) do
     Store.complete(attempt.job_id, attempt.attempt_id, result)
@@ -448,7 +443,7 @@ defmodule JobRunner.Jobs.Queue do
     state
   end
 
-  # --- Priority queues ---------------------------------------------
+  # --- Priority queues
 
   defp push(state, job_id, priority) do
     priority = if priority in @priorities, do: priority, else: :normal
@@ -481,7 +476,7 @@ defmodule JobRunner.Jobs.Queue do
     end
   end
 
-  # --- In-flight bookkeeping -------------------------------------------------
+  # --- In-flight bookkeeping
 
   defp pop_in_flight(state, ref) do
     case Map.pop(state.in_flight, ref) do
