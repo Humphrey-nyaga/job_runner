@@ -78,12 +78,9 @@ JobRunner.Jobs.dead_letters()  # failures, with full attempt history]}</pre>
         </div>
 
         <div class="rounded-xl border border-base-300 bg-base-100 p-4">
-          <h3 class="font-medium">3. The demo script</h3>
+          <h3 class="font-medium">3. The sample script</h3>
           <pre class="mt-2 overflow-x-auto rounded-lg bg-base-200 p-3 text-xs">mix run demo.exs</pre>
-          <p class="mt-2 text-sm opacity-80">
-            Ten sections in about two minutes: supervision tree, bounded concurrency, backoff,
-            dead letters, crash isolation, circuit breaker, and killing the queue mid-flight.
-          </p>
+  
         </div>
       </div>
     </section>
@@ -140,38 +137,6 @@ JobRunner.Jobs.dead_letters()  # failures, with full attempt history]}</pre>
           </tbody>
         </table>
       </div>
-    </section>
-
-    <section class="space-y-3">
-      <h2 class="text-xl font-semibold">Design</h2>
-      <p class="text-sm opacity-80">
-        Full reasoning lives in <code>docs/DESIGN.md</code>
-        — C4 and sequence diagrams, an FMEA table, and 13 ADRs with the alternatives that were
-        rejected and why. The four that carry the most weight:
-      </p>
-
-      <ul class="space-y-2 text-sm">
-        <li class="rounded-lg border border-base-300 bg-base-100 p-3">
-          <strong>Backoff is a queue timer, not a worker sleep.</strong>
-          A sleeping worker still holds a concurrency slot — four sleeping workers mean a
-          throughput of zero.
-        </li>
-        <li class="rounded-lg border border-base-300 bg-base-100 p-3">
-          <strong>Two nested supervision strategies.</strong>
-          The store must outlive a queue crash; the queue and its task supervisor are mutually
-          dependent and restart together.
-        </li>
-        <li class="rounded-lg border border-base-300 bg-base-100 p-3">
-          <strong>Every outcome carries a generation token.</strong>
-          A stale deadline from attempt 3 cannot kill a healthy attempt 4.
-        </li>
-        <li class="rounded-lg border border-base-300 bg-base-100 p-3">
-          <strong>Recovery reconciles every non-terminal job.</strong>
-          Re-enqueuing only <code>pending</code>
-          would strand jobs killed mid-flight in <code>running</code>
-          forever.
-        </li>
-      </ul>
     </section>
   </div>
 </Layouts.app>
